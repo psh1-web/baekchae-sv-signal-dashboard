@@ -332,6 +332,7 @@ canvas{max-height:230px}
           <option value="inactive">미영업만</option>
         </select>
         <span class="cnt" id="raw-cnt" style="margin-left:auto"></span>
+        <button class="btn" id="raw-copy-btn" onclick="copyRawData()">📋 전체 복사 (엑셀 붙여넣기용)</button>
       </div>
       <div class="tablewrap scrollbox"><table class="grid mxtable" style="table-layout:auto">
         <thead><tr id="raw-thead"></tr></thead>
@@ -730,6 +731,7 @@ function renderRawTable(){
   document.getElementById('raw-total-note').textContent=
     `전체 ${all.length}건(활성 ${P.stores.length}·미영업 ${P.inactive.length} 중 필터 결과) · 엑셀 원본 그대로, 가공/재계산 없음`;
   document.getElementById('raw-cnt').textContent=`${all.length}건 표시`;
+  window._rawFiltered = all; window._rawDow = DOW;
 
   document.getElementById('raw-thead').innerHTML=
     `<th class="l">#</th><th class="l">매장명</th><th class="l">SV</th><th class="l">포스</th><th class="l">상태</th>`+
@@ -748,6 +750,40 @@ function renderRawTable(){
       <td class="l act">${s.memo||''}</td><td class="l act">${s.plan||''}</td>
     </tr>`;
   }).join('');
+}
+
+function copyRawData(){
+  const all = window._rawFiltered || [];
+  const DOW = window._rawDow || P.meta.dow;
+  if(!all.length){ alert('복사할 데이터가 없습니다.'); return; }
+  const headers = ['#','매장명','SV','포스','상태','전주영업일','전주매출',
+    ...DOW.map(d=>'전'+d), '금주영업일','금주매출', ...DOW.map(d=>'금'+d),
+    '매출분석(원문)','추후계획(원문)'];
+  const lines = [headers.join('\t')];
+  all.forEach(s=>{
+    const row = [
+      s.no??'', s.name, s.sv||'', s.pos||'', s._status,
+      s.prev_days, s.prev, ...s.prev_daily,
+      s.cur_days, s.cur, ...s.cur_daily,
+      (s.memo||'').replace(/\n/g,' '), (s.plan||'').replace(/\n/g,' ')
+    ];
+    lines.push(row.join('\t'));
+  });
+  const tsv = lines.join('\n');
+  const btn = document.getElementById('raw-copy-btn');
+  const done = ()=>{ const old=btn.textContent; btn.textContent='✅ 복사 완료 ('+all.length+'건)'; setTimeout(()=>btn.textContent=old,1800); };
+  const fail = ()=>{ alert('클립보드 복사 권한이 차단되어 있습니다. 표를 직접 드래그해서 복사해 주세요.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(tsv).then(done).catch(fail);
+  } else {
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=tsv; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      done();
+    }catch(e){ fail(); }
+  }
 }
 
 document.getElementById('mx-toggle').onclick=()=>{
