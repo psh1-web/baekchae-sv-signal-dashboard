@@ -228,6 +228,7 @@ canvas{max-height:230px}
     <button class="vbtn on" data-v="store" onclick="switchView('store')">🚦 관리 시그널</button>
     <button class="vbtn" data-v="dow" onclick="switchView('dow')">📅 요일별 분석</button>
     <button class="vbtn" data-v="rank" onclick="switchView('rank')">📈 매출 랭킹</button>
+    <button class="vbtn" data-v="raw" onclick="switchView('raw')">🗄 원본 데이터(검수용)</button>
   </div>
 
 
@@ -315,6 +316,28 @@ canvas{max-height:230px}
         <div class="tablewrap"><table class="grid"><thead><tr id="up-thead"></tr></thead><tbody id="top-up"></tbody></table></div></div>
       <div class="panel"><div class="panel-h"><span class="sq" style="background:#2E5AAC"></span><h2>하락 TOP 10</h2><span class="cnt">전주 대비</span></div>
         <div class="tablewrap"><table class="grid"><thead><tr id="down-thead"></tr></thead><tbody id="top-down"></tbody></table></div></div>
+    </div>
+  </div>
+
+  <div id="view-raw" style="display:none">
+    <div class="rankcard">
+      <div class="panel-h"><span class="sq"></span><h2>원본 데이터 (검수용)</h2>
+        <span class="cnt" id="raw-total-note">엑셀 원본 그대로, 가공/재계산 없음 · 업무지원 대사 확인용</span></div>
+      <div class="controls" style="margin-bottom:12px">
+        <input id="raw-search" placeholder="매장명 검색…">
+        <select id="raw-svf"><option value="전체">담당 SV 전체</option></select>
+        <select id="raw-statusf">
+          <option value="">전체(활성+미영업)</option>
+          <option value="active">활성만</option>
+          <option value="inactive">미영업만</option>
+        </select>
+        <span class="cnt" id="raw-cnt" style="margin-left:auto"></span>
+      </div>
+      <div class="tablewrap scrollbox"><table class="grid mxtable" style="table-layout:auto">
+        <thead><tr id="raw-thead"></tr></thead>
+        <tbody id="raw-tbody"></tbody>
+      </table></div>
+      <div class="rnote" style="margin-top:10px" id="raw-source-note"></div>
     </div>
   </div>
 
@@ -530,9 +553,11 @@ function switchView(v){
   document.getElementById('view-store').style.display=(v==='store')?'':'none';
   document.getElementById('view-dow').style.display=(v==='dow')?'':'none';
   document.getElementById('view-rank').style.display=(v==='rank')?'':'none';
+  document.getElementById('view-raw').style.display=(v==='raw')?'':'none';
   document.querySelectorAll('.vbtn').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   if(v==='dow')renderDow();
   if(v==='rank')renderRank();
+  if(v==='raw')renderRaw();
 }
 function renderDow(){
   const DOW=P.meta.dow;const sv=document.getElementById('svf').value;
@@ -676,6 +701,54 @@ function renderRank(){
 document.querySelectorAll('.rtab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.rtab').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');rankBasis=b.dataset.r;renderRank();});
+
+// ── 원본 데이터(검수용) ──
+let rawInit=false;
+function renderRaw(){
+  if(!rawInit){
+    const sel=document.getElementById('raw-svf');
+    P.sv_order.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o);});
+    document.getElementById('raw-source-note').textContent=
+      '데이터 출처: 매출정리_주간_260629.xlsx · 주간매출 '+P.meta.cur_label+' 시트(B~W, AH, AI열) · 전주/금주 일별 매출은 엑셀 원본 숫자를 그대로 표시(가공 없음)';
+    ['raw-search','raw-svf','raw-statusf'].forEach(id=>document.getElementById(id).addEventListener('input',renderRawTable));
+    rawInit=true;
+  }
+  renderRawTable();
+}
+function renderRawTable(){
+  const DOW=P.meta.dow;
+  const q=document.getElementById('raw-search').value.trim();
+  const sv=document.getElementById('raw-svf').value;
+  const st=document.getElementById('raw-statusf').value;
+  let all=[];
+  if(st!=='inactive') all=all.concat(P.stores.map(s=>({...s,_status:'활성'})));
+  if(st!=='active') all=all.concat(P.inactive.map(s=>({...s,_status:'미영업'})));
+  if(sv!=='전체') all=all.filter(s=>s.sv===sv);
+  if(q) all=all.filter(s=>s.name.includes(q));
+  all.sort((a,b)=>(parseFloat(a.no)||0)-(parseFloat(b.no)||0));
+
+  document.getElementById('raw-total-note').textContent=
+    `전체 ${all.length}건(활성 ${P.stores.length}·미영업 ${P.inactive.length} 중 필터 결과) · 엑셀 원본 그대로, 가공/재계산 없음`;
+  document.getElementById('raw-cnt').textContent=`${all.length}건 표시`;
+
+  document.getElementById('raw-thead').innerHTML=
+    `<th class="l">#</th><th class="l">매장명</th><th class="l">SV</th><th class="l">포스</th><th class="l">상태</th>`+
+    `<th>전주영업일</th><th>전주매출</th>`+DOW.map(d=>`<th>전${d}</th>`).join('')+
+    `<th>금주영업일</th><th>금주매출</th>`+DOW.map(d=>`<th>금${d}</th>`).join('')+
+    `<th class="l">매출분석(원문)</th><th class="l">추후계획(원문)</th>`;
+
+  document.getElementById('raw-tbody').innerHTML=all.map(s=>{
+    const prevCells=s.prev_daily.map(v=>`<td>${won(v)}</td>`).join('');
+    const curCells=s.cur_daily.map(v=>`<td>${won(v)}</td>`).join('');
+    return `<tr>
+      <td class="rank">${s.no??''}</td><td class="l nm">${s.name}</td><td class="l">${s.sv||''}</td><td class="l pos-t">${s.pos||''}</td>
+      <td class="l">${s._status}</td>
+      <td>${s.prev_days}</td><td>${won(s.prev)}</td>${prevCells}
+      <td>${s.cur_days}</td><td>${won(s.cur)}</td>${curCells}
+      <td class="l act">${s.memo||''}</td><td class="l act">${s.plan||''}</td>
+    </tr>`;
+  }).join('');
+}
 
 document.getElementById('mx-toggle').onclick=()=>{
   const w=document.getElementById('mx-wrap');const open=w.style.display==='none';
