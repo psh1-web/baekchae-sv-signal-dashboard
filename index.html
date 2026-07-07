@@ -185,7 +185,13 @@ table.mxtable td.mxbest{background:#FBEDEC;border-radius:3px}
 .drill .dhead h3{flex:1;min-width:200px}
 .drill h3{font-size:14px;font-weight:800}
 .drill .unit{font-size:11.5px;color:var(--sub);font-weight:600}
-.daypick{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.daypick{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.daypick .dsep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+.filtbtn{padding:7px 13px;font-size:12.5px;font-weight:700;border-radius:8px;border:1px solid var(--rose-d);background:#fff;color:var(--sub);cursor:pointer;font-family:inherit}
+.filtbtn.on{color:#fff;border-color:transparent}
+.filtbtn[data-f="crit"].on{background:#C0392B}
+.filtbtn[data-f="zero"].on{background:#6B7280}
+.filtbtn[data-f="all"].on{background:var(--brick)}
 .daybtn{padding:7px 14px;font-size:13px;font-weight:700;color:var(--sub);background:#fff;border:1px solid var(--rose-d);border-radius:8px;cursor:pointer;font-family:inherit}
 .daybtn.on{background:var(--down);color:#fff;border-color:var(--down)}
 .daybtn.worst{box-shadow:0 0 0 2px #FCE4BF inset}
@@ -556,7 +562,7 @@ document.getElementById('overlay').onclick=e=>{if(e.target.id==='overlay')closeM
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 // ── 뷰 스위처 & 요일별 ──
-let curView='store',curDowSel=null;
+let curView='store',curDowSel=null,drillFilter='all';
 function switchView(v){
   curView=v;
   document.getElementById('view-store').style.display=(v==='store')?'':'none';
@@ -598,11 +604,20 @@ function renderDow(){
     scales:{y:{ticks:{callback:v=>(v/1e4).toFixed(0)+'만',font:{family:'Malgun Gothic'}}},x:{ticks:{font:{family:'Malgun Gothic'}}}}}});
   // 요일선택/드릴
   window._wi=wi;window._bi=bi;if(curDowSel===null)curDowSel=wi;
-  document.getElementById('daypick').innerHTML=DOW.map((d,i)=>{
+  const dayBtnsHtml = DOW.map((d,i)=>{
     const mark=i===wi?' ▼최대하락':(i===bi?' ▲최대선전':'');
     const wc=i===wi?' worst':(i===bi?' best':'');
     return `<button class="daybtn${i===curDowSel?' on':''}${wc}" data-i="${i}">${d}${mark}</button>`;}).join('');
+  const filtHtml = `<span class="dsep"></span>
+    <button class="filtbtn" data-f="all">전체</button>
+    <button class="filtbtn" data-f="crit">-20%↓</button>
+    <button class="filtbtn" data-f="zero">당일0원</button>`;
+  document.getElementById('daypick').innerHTML = dayBtnsHtml + filtHtml;
   document.querySelectorAll('.daybtn').forEach(btn=>btn.onclick=()=>{curDowSel=+btn.dataset.i;renderDayDrill();});
+  document.querySelectorAll('.filtbtn').forEach(btn=>{
+    btn.classList.toggle('on', btn.dataset.f===drillFilter);
+    btn.onclick=()=>{drillFilter=btn.dataset.f;renderDayDrill();};
+  });
   renderDayDrill();
   // 매트릭스 (성장→집중관리 순 = wow desc)
   const wpn=s=>s.wow_pct===null?1e9:s.wow_pct;
@@ -666,21 +681,10 @@ function renderDayDrill(){
      <td>${won(x.pv)}</td><td>${won(x.cu)}</td>
      <td class="${cls(x.pct)}">${amtf(x.diff)}</td><td class="${cls(x.pct)}"><b>${x.pct===null?'-':pctf(x.pct)}</b></td></tr>`;
   }
-  // -20% 기준선: 하락(비선전) 뷰에서 정확히 -20% 지점에 구분선 삽입
+  // 필터 버튼(전체/-20%↓/당일0원)에 따라 표시 대상만 선택 (구분선 없이 완전히 걸러서 표시)
   let html='';
-  if(!gainView){
-    const crit=list.filter(x=>x.pct<=-0.20), rest=list.filter(x=>x.pct>-0.20);
-    html += crit.map((x,idx)=>rowOf(x,idx)).join('');
-    if(crit.length){
-      html += `<tr><td colspan="9" class="grouplbl" style="border-left:5px solid #C0392B;background:#FCEBEA;color:#B00000;font-weight:800">▲ 위 ${crit.length}개 매장 : 증감율 ≤ -20% (집중관리 기준선)</td></tr>`;
-    }
-    html += rest.map((x,idx)=>rowOf(x,idx+crit.length)).join('');
-  }else{
-    html = list.map((x,idx)=>rowOf(x,idx)).join('');
-  }
-  if(zeroList.length){
-    html += `<tr><td colspan="9" class="grouplbl" style="border-left:5px solid #6B7280">당일 매출 0원 ${zeroList.length}개 — 증감율 계산 불가(별도 확인 필요, 순위 미포함)</td></tr>`;
-    html += zeroList.map((x,idx)=>{
+  if(drillFilter==='zero'){
+    html = zeroList.map((x,idx)=>{
       const s=x.s;const avg=s.cur_days?s.cur/s.cur_days:0;
       const label = x.pv===0 ? '전주 당일0→금주 매출' : '전주 매출→금주 당일0';
       return `<tr data-name="${s.name}" style="cursor:pointer;color:#6A615C">
@@ -688,7 +692,12 @@ function renderDayDrill(){
        <td>${s.cur_days}</td><td>${won(avg)}</td>
        <td>${won(x.pv)}</td><td>${won(x.cu)}</td>
        <td colspan="2" class="l" style="color:#8A7F7A">${label}</td></tr>`;
-    }).join('');
+    }).join('') || `<tr><td colspan="9" style="text-align:center;color:#B0A8A4;padding:18px">당일 매출 0원 매장 없음</td></tr>`;
+  }else if(drillFilter==='crit'){
+    const crit=list.filter(x=>x.pct<=-0.20);
+    html = crit.map((x,idx)=>rowOf(x,idx)).join('') || `<tr><td colspan="9" style="text-align:center;color:#B0A8A4;padding:18px">-20% 이하 하락 매장 없음</td></tr>`;
+  }else{
+    html = list.map((x,idx)=>rowOf(x,idx)).join('');
   }
   tb.innerHTML = html;
   tb.querySelectorAll('tr[data-name]').forEach(tr=>tr.onclick=()=>openModal(tr.dataset.name,false));
