@@ -192,6 +192,7 @@ table.mxtable td.mxbest{background:#FBEDEC;border-radius:3px}
 .filtbtn[data-f="crit"].on{background:#C0392B}
 .filtbtn[data-f="zero"].on{background:#6B7280}
 .filtbtn[data-f="all"].on{background:var(--brick)}
+.filtbtn[data-f="surge"].on{background:#2E7D32}
 .daybtn{padding:7px 14px;font-size:13px;font-weight:700;color:var(--sub);background:#fff;border:1px solid var(--rose-d);border-radius:8px;cursor:pointer;font-family:inherit}
 .daybtn.on{background:var(--down);color:#fff;border-color:var(--down)}
 .daybtn.worst{box-shadow:0 0 0 2px #FCE4BF inset}
@@ -610,6 +611,7 @@ function renderDow(){
     return `<button class="daybtn${i===curDowSel?' on':''}${wc}" data-i="${i}">${d}${mark}</button>`;}).join('');
   const filtHtml = `<span class="dsep"></span>
     <button class="filtbtn" data-f="all">전체</button>
+    <button class="filtbtn" data-f="surge">+15%↑</button>
     <button class="filtbtn" data-f="crit">-20%↓</button>
     <button class="filtbtn" data-f="zero">당일0원</button>`;
   document.getElementById('daypick').innerHTML = dayBtnsHtml + filtHtml;
@@ -654,6 +656,7 @@ function renderDow(){
 function renderDayDrill(){
   const DOW=P.meta.dow;const i=curDowSel;const sv=document.getElementById('svf').value;
   document.querySelectorAll('.daybtn').forEach(b=>b.classList.toggle('on',+b.dataset.i===i));
+  document.querySelectorAll('.filtbtn').forEach(b=>b.classList.toggle('on', b.dataset.f===drillFilter));
   let base=P.stores.slice();if(sv!=='전체')base=base.filter(s=>s.sv===sv);
   // 전체 매장, 이 요일 전주대비 산출. 당일 0원 매장(전주 또는 금주 그 요일 매출 0)은 증감율 계산이 왜곡되므로 별도 분리
   let all=base.map(s=>{const pv=s.prev_daily[i],cu=s.cur_daily[i];
@@ -696,6 +699,9 @@ function renderDayDrill(){
   }else if(drillFilter==='crit'){
     const crit=list.filter(x=>x.pct<=-0.20);
     html = crit.map((x,idx)=>rowOf(x,idx)).join('') || `<tr><td colspan="9" style="text-align:center;color:#B0A8A4;padding:18px">-20% 이하 하락 매장 없음</td></tr>`;
+  }else if(drillFilter==='surge'){
+    const surge=list.filter(x=>x.pct>=0.15).sort((a,b)=>b.pct-a.pct);
+    html = surge.map((x,idx)=>rowOf(x,idx)).join('') || `<tr><td colspan="9" style="text-align:center;color:#B0A8A4;padding:18px">+15% 이상 상승 매장 없음</td></tr>`;
   }else{
     html = list.map((x,idx)=>rowOf(x,idx)).join('');
   }
