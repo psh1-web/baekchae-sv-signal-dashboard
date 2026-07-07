@@ -82,6 +82,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--cre
 .sigtable .action{color:#6A615C;font-size:12.5px}
 .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 11px;border-radius:14px;white-space:nowrap}
 .b-crit{background:var(--critbg);color:var(--red)}
+.b-hiatus{background:#E7E5E2;color:#2B2B2B;font-weight:800}
 .b-watch{background:var(--watchbg);color:var(--amber)}
 .b-sai{background:var(--saibg);color:var(--orange)}
 .b-day{background:var(--daybg);color:#6B7280}
@@ -367,6 +368,7 @@ const cls=p=>p===null?'':(p>=0?'up':'down');
 // ── 시그널 판정 (WoW 기반) ──
 function sig(s){
   const wp=s.wow_pct;
+  if(s.prev>0 && s.cur===0)return {k:'휴업',b:'b-hiatus',dot:'#3A3A3A',ico:'⛔'};
   if(wp===null)return {k:'성장',b:'b-grow',dot:'#2E7D32',ico:'●'};
   if(wp<=-0.20)return {k:'집중관리',b:'b-crit',dot:'#C0392B',ico:'●'};
   if(wp<=-0.10)return {k:'관찰필요',b:'b-watch',dot:'#C0870C',ico:'●'};
@@ -375,16 +377,17 @@ function sig(s){
   return {k:'양호',b:'b-ok',dot:'#C4C4C4',ico:'●'};
 }
 const ACTION={
+  '휴업':'즉시 확인 : 금주 매출 0 — 휴무·단전(운영중단)·데이터 미기재 여부 파악, 영업 재개 지원',
   '집중관리':'즉시 방문 : 하락 원인(상권·경쟁·운영·품질) 파악 및 개선 협의',
   '관찰필요':'하락 요인 확인 · 판촉/배달채널 점검',
   '영업일수':'휴무·단축영업 사유 확인',
   '성장':'성장 요인 정리 : 우수 사례 공유',
   '양호':'정상 관리 유지',
 };
-const RISK={'집중관리':0,'관찰필요':1,'영업일수':2,'양호':3,'성장':4,'미영업':5};
+const RISK={'휴업':-1,'집중관리':0,'관찰필요':1,'영업일수':2,'양호':3,'성장':4,'미영업':5};
 
 function badge(k,ico,dot){
-  const cmap={'집중관리':'b-crit','관찰필요':'b-watch','영업일수':'b-day','성장':'b-grow','양호':'b-ok','미영업':'b-day'};
+  const cmap={'휴업':'b-hiatus','집중관리':'b-crit','관찰필요':'b-watch','영업일수':'b-day','성장':'b-grow','양호':'b-ok','미영업':'b-day'};
   return `<span class="badge ${cmap[k]}"><span class="dot" style="background:${dot}"></span>${k}</span>`;
 }
 
@@ -405,7 +408,7 @@ function buildSV(id){
 }
 buildSV('svtabs-store');buildSV('svtabs-dow');
 // 시그널 칩 (드롭다운 대신 클릭)
-const SIGDEF=[['','전체','#8A7F7A'],['집중관리','집중관리','#C0392B'],['관찰필요','관찰필요','#C0870C'],['영업일수','영업일수','#9AA0A6'],['성장','성장','#2E7D32'],['양호','양호','#C4C4C4'],['미영업','미영업','#6B7280']];
+const SIGDEF=[['','전체','#8A7F7A'],['휴업','휴업','#3A3A3A'],['집중관리','집중관리','#C0392B'],['관찰필요','관찰필요','#C0870C'],['영업일수','영업일수','#9AA0A6'],['성장','성장','#2E7D32'],['양호','양호','#C4C4C4'],['미영업','미영업','#6B7280']];
 function buildSigChips(){
   const cur=document.getElementById('sigf').value;
   document.getElementById('sigchips').innerHTML=SIGDEF.map(([k,lbl,c])=>
@@ -632,21 +635,24 @@ function renderDayDrill(){
   const DOW=P.meta.dow;const i=curDowSel;const sv=document.getElementById('svf').value;
   document.querySelectorAll('.daybtn').forEach(b=>b.classList.toggle('on',+b.dataset.i===i));
   let base=P.stores.slice();if(sv!=='전체')base=base.filter(s=>s.sv===sv);
-  // 전체 매장, 이 요일 전주대비 산출
-  let list=base.map(s=>{const pv=s.prev_daily[i],cu=s.cur_daily[i];
-    return {s,pv,cu,diff:cu-pv,pct:pv?(cu-pv)/pv:(cu>0?null:0)};});
-  // 최대선전 요일이면 상승 큰 순, 그 외(하락 요일 포함)엔 하락 큰 순
+  // 전체 매장, 이 요일 전주대비 산출. 당일 0원 매장(전주 또는 금주 그 요일 매출 0)은 증감율 계산이 왜곡되므로 별도 분리
+  let all=base.map(s=>{const pv=s.prev_daily[i],cu=s.cur_daily[i];
+    return {s,pv,cu,diff:cu-pv,pct:(pv>0&&cu>0)?(cu-pv)/pv:null,dayZero:(pv===0||cu===0)};});
+  let list=all.filter(x=>!x.dayZero);
+  let zeroList=all.filter(x=>x.dayZero);
+  // 최대선전 요일이면 증감율 높은 순, 그 외(하락 요일 포함)엔 증감율 낮은 순 (증감율 기준 정렬, 당일0원 제외)
   const gainView=(i===window._bi);
-  list.sort((a,b)=>gainView? b.diff-a.diff : a.diff-b.diff);
+  list.sort((a,b)=>gainView? b.pct-a.pct : a.pct-b.pct);
+  zeroList.sort((a,b)=>(b.cu-b.pv)-(a.cu-a.pv));
   const dn=list.filter(x=>x.diff<0), upn=list.filter(x=>x.diff>0);
   const totDrop=dn.reduce((a,x)=>a+x.diff,0), totUp=upn.reduce((a,x)=>a+x.diff,0);
-  const tag=gainView?`상승 큰 순 · 상승합계 <b class="up">▲${won(totUp)}원</b>`:`하락 큰 순 · 하락합계 <b class="down">${amtf(totDrop)}원</b>`;
+  const tag=gainView?`증감율 높은 순 · 상승합계 <b class="up">▲${won(totUp)}원</b>`:`증감율 낮은 순 · 하락합계 <b class="down">${amtf(totDrop)}원</b>`;
   const icon=gainView?'📈':'📊';
-  document.getElementById('drill-title').innerHTML=`${icon} ${DOW[i]}요일 매장 상세 <span class="unit">${sv==='전체'?'전체':sv+' 담당'} · 전주 ${P.meta.prev_dates[i]} → 금주 ${P.meta.cur_dates[i]} · 전체 ${list.length}개 (하락 ${dn.length}·상승 ${upn.length}) · ${tag}</span>`;
+  document.getElementById('drill-title').innerHTML=`${icon} ${DOW[i]}요일 매장 상세 <span class="unit">${sv==='전체'?'전체':sv+' 담당'} · 전주 ${P.meta.prev_dates[i]} → 금주 ${P.meta.cur_dates[i]} · 비교가능 ${list.length}개(하락 ${dn.length}·상승 ${upn.length}) · 당일0원 ${zeroList.length}개 별도 · ${tag}</span>`;
   document.getElementById('dh-prev').textContent=`전주(${P.meta.prev_dates[i]})`;
   document.getElementById('dh-cur').textContent=`금주(${P.meta.cur_dates[i]})`;
   const tb=document.getElementById('drill-tbody');
-  tb.innerHTML=list.map((x,idx)=>{
+  function rowOf(x,idx){
     const s=x.s;const avg=s.cur_days?s.cur/s.cur_days:0;
     const dc=s.days_drop?'style="background:#FFF6DA;color:#9A7B00;font-weight:700;border-radius:4px"':'';
     return `<tr data-name="${s.name}" style="cursor:pointer">
@@ -654,8 +660,22 @@ function renderDayDrill(){
      <td ${dc}>${s.cur_days}${s.days_drop?' ◷':''}</td><td>${won(avg)}</td>
      <td>${won(x.pv)}</td><td>${won(x.cu)}</td>
      <td class="${cls(x.pct)}">${amtf(x.diff)}</td><td class="${cls(x.pct)}"><b>${x.pct===null?'-':pctf(x.pct)}</b></td></tr>`;
-  }).join('');
-  tb.querySelectorAll('tr').forEach(tr=>tr.onclick=()=>openModal(tr.dataset.name,false));
+  }
+  let html = list.map((x,idx)=>rowOf(x,idx)).join('');
+  if(zeroList.length){
+    html += `<tr><td colspan="9" class="grouplbl" style="border-left:5px solid #6B7280">당일 매출 0원 ${zeroList.length}개 — 증감율 계산 불가(별도 확인 필요, 순위 미포함)</td></tr>`;
+    html += zeroList.map((x,idx)=>{
+      const s=x.s;const avg=s.cur_days?s.cur/s.cur_days:0;
+      const label = x.pv===0 ? '전주 당일0→금주 매출' : '전주 매출→금주 당일0';
+      return `<tr data-name="${s.name}" style="cursor:pointer;color:#6A615C">
+       <td class="rank" style="color:#B0A8A4">${idx+1}</td><td class="l nm">${s.name}</td><td class="l">${s.sv||''}</td>
+       <td>${s.cur_days}</td><td>${won(avg)}</td>
+       <td>${won(x.pv)}</td><td>${won(x.cu)}</td>
+       <td colspan="2" class="l" style="color:#8A7F7A">${label}</td></tr>`;
+    }).join('');
+  }
+  tb.innerHTML = html;
+  tb.querySelectorAll('tr[data-name]').forEach(tr=>tr.onclick=()=>openModal(tr.dataset.name,false));
 }
 
 // ── 매출 랭킹 ──
@@ -682,7 +702,7 @@ function renderRank(){
       if(rankBasis==='vol'){pv=s.prev;cu=s.cur;m=s.prev?(s.cur-s.prev)/s.prev:null;}
       else{pv=s.prev_days?s.prev/s.prev_days:0;cu=s.cur_days?s.cur/s.cur_days:0;m=pv?(cu-pv)/pv:null;}
       return {s,pv,cu,m};
-    }).filter(x=>x.m!==null&&isFinite(x.m)&&(dir>0?x.m>0:x.m<0));
+    }).filter(x=>x.m!==null&&isFinite(x.m)&&(dir>0?x.m>0:x.m<0)&&!(x.s.prev>0&&x.s.cur===0));
     arr.sort((a,b)=>dir>0?b.m-a.m:a.m-b.m);
     return arr.slice(0,10);
   }
