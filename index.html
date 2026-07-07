@@ -305,7 +305,10 @@ canvas{max-height:230px}
     </div>
     <div class="mx-head" id="mx-toggle"><h3><span id="mx-arrow">▾</span> 매장별 요일 상세 매트릭스 (담당자별 구분)</h3>
       <span class="unit">단위: 만원 · 담당자별 그룹(성장→집중관리 순) · 제목 클릭 시 접기</span></div>
-    <div id="mx-wrap"><div class="tablewrap scrollbox"><table class="grid mxtable"><thead><tr id="mx-thead"></tr></thead><tbody id="mx-tbody"></tbody></table></div></div>
+    <div id="mx-wrap">
+      <div class="svbar"><span class="svbar-l">👤 담당자별 보기 :</span><div class="svtabs" id="svtabs-matrix"></div></div>
+      <div class="tablewrap scrollbox"><table class="grid mxtable"><thead><tr id="mx-thead"></tr></thead><tbody id="mx-tbody"></tbody></table></div>
+    </div>
   </div>
 
   <div id="view-rank" style="display:none">
@@ -415,7 +418,7 @@ function buildSV(id){
   document.getElementById(id).innerHTML=t.map(x=>
     `<div class="svtab${x.sv===cur?' on':''}" data-sv="${x.sv}">${x.sv}<span class="m">${x.count}</span></div>`).join('');
 }
-buildSV('svtabs-store');buildSV('svtabs-dow');
+buildSV('svtabs-store');buildSV('svtabs-dow');buildSV('svtabs-matrix');
 // 시그널 칩 (드롭다운 대신 클릭)
 const SIGDEF=[['','전체','#8A7F7A'],['집중관리','집중관리','#C0392B'],['관찰필요','관찰필요','#C0870C'],['영업일수','영업일수','#9AA0A6'],['성장','성장','#2E7D32'],['양호','양호','#C4C4C4'],['미영업','미영업','#6B7280']];
 function buildSigChips(){
