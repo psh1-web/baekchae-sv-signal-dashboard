@@ -410,9 +410,12 @@ const cls=p=>p===null?'':(p>=0?'up':'down');
 
 
 // ── 시그널 판정 (WoW 기반) ──
+const OTHER_POS_NAMES=new Set(['진해이동점','시흥대야점','성수점','상암점','미사강변점','망월사역점','대명비발디점']);
 function sig(s){
+  if(OTHER_POS_NAMES.has(s.name))return {k:'타사포스',b:'b-day',dot:'#9AA0A6',ico:'🏳️'};
   const wp=s.wow_pct;
-  if(s.prev>0 && s.cur===0)return {k:'미영업',b:'b-day',dot:'#6B7280',ico:'⛔'};
+  if(s.prev===0 && s.cur===0)return {k:'미영업',b:'b-mng2',dot:'#8B0000',ico:'⛔'};
+  if(s.prev>0 && s.cur===0)return {k:'미영업',b:'b-mng2',dot:'#8B0000',ico:'⛔'};
   if(wp===null)return {k:'성장',b:'b-grow',dot:'#2E7D32',ico:'●'};
   if(wp<=-0.20)return {k:'집중관리',b:'b-crit',dot:'#C0392B',ico:'●'};
   if(wp<=-0.10)return {k:'관찰필요',b:'b-watch',dot:'#C0870C',ico:'●'};
@@ -494,7 +497,7 @@ function renderGrid(){
 
   if(sigf==='타사포스'){
     thead.innerHTML=OFF_HEAD;
-    let rows=P.inactive.slice();
+    let rows=P.inactive.filter(s=>OTHER_POS_NAMES.has(s.name));
     if(sv!=='전체')rows=rows.filter(s=>s.sv===sv);
     if(q)rows=rows.filter(s=>s.name.includes(q));
     document.getElementById('grid-cnt').textContent=`타사포스 ${rows.length}개`;
@@ -510,6 +513,10 @@ function renderGrid(){
 
   thead.innerHTML=GRID_HEAD;
   let rows=P.stores.slice();
+  if(sigf==='미영업'){
+    // 고정리스트(타사포스)가 아닌데 매출0/0인 매장(예상외 완전휴업)도 미영업에 포함
+    rows=rows.concat(P.inactive.filter(s=>!OTHER_POS_NAMES.has(s.name)));
+  }
   if(sv!=='전체')rows=rows.filter(s=>s.sv===sv);
   if(q)rows=rows.filter(s=>s.name.includes(q));
   if(sigf)rows=rows.filter(s=>sig(s).k===sigf);
