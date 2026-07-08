@@ -573,13 +573,16 @@ function openModal(name,off){
   document.getElementById('mmemos').innerHTML=`<div class="mmemo" style="border-left-color:#B22222"><div class="t" style="color:#B22222">📈 추이 분석</div>${trend}</div>`;
   document.getElementById('overlay').classList.add('show');
   if(window.CH)window.CH.destroy();
+  const modalAll=[...s.prev_daily,...s.cur_daily].filter(v=>v>0);
+  const modalMin=modalAll.length?Math.min(...modalAll):0, modalMax=modalAll.length?Math.max(...modalAll):0;
+  const modalPad=(modalMax-modalMin)*0.12 || modalMax*0.03 || 1;
   window.CH=new Chart(document.getElementById('chart'),{type:'line',
    data:{labels:P.meta.dow,datasets:[
     {label:'전전주 ('+P.meta.prev_range+')',data:s.prev_daily,borderColor:'#D8A48F',backgroundColor:'#D8A48F',pointRadius:4,pointHoverRadius:6,borderWidth:2,tension:.3,fill:false},
     {label:'전주 ('+P.meta.cur_range+')',data:s.cur_daily,borderColor:'#B22222',backgroundColor:'#B22222',pointRadius:4,pointHoverRadius:6,borderWidth:3,tension:.3,fill:false}]},
    options:{responsive:true,plugins:{legend:{position:'top',labels:{font:{family:'Malgun Gothic',size:11}}},
     tooltip:{callbacks:{label:c=>c.dataset.label+': '+won(c.raw)+'원'}}},
-    scales:{y:{beginAtZero:false,ticks:{callback:v=>(v/1e4).toFixed(0)+'만',font:{family:'Malgun Gothic'}}},x:{ticks:{font:{family:'Malgun Gothic'}}}}}});
+    scales:{y:{min:Math.max(0,modalMin-modalPad),max:modalMax+modalPad,ticks:{callback:v=>(v/1e4).toFixed(0)+'만',font:{family:'Malgun Gothic'}}},x:{ticks:{font:{family:'Malgun Gothic'}}}}}});
 }
 function closeModal(){document.getElementById('overlay').classList.remove('show');}
 document.getElementById('overlay').onclick=e=>{if(e.target.id==='overlay')closeModal();};
@@ -616,13 +619,17 @@ function renderDow(){
    return `<tr><td class="l"><b>${d}</b></td><td${c}>${won(pv[i])}</td><td${c}>${won(cu[i])}</td>`+
     `<td class="${cls(pct[i])}"${c}>${amtf(diff[i])}</td><td class="${cls(pct[i])}"${c}><b>${pctf(pct[i])}</b></td></tr>`;}).join('');
   if(window.CHD1)window.CHD1.destroy();
+  // Y축 범위를 실제 데이터 최소~최대 근처로 좁혀 차이를 극대화 (패딩 8%)
+  const cmpAll=[...pv,...cu];
+  const cmpMin=Math.min(...cmpAll), cmpMax=Math.max(...cmpAll);
+  const cmpPad=(cmpMax-cmpMin)*0.12 || cmpMax*0.03;
   window.CHD1=new Chart(document.getElementById('chart-dow-cmp'),{type:'line',
    data:{labels:DOW,datasets:[
     {label:'전전주',data:pv,borderColor:'#D8A48F',backgroundColor:'#D8A48F',pointRadius:5,pointHoverRadius:7,borderWidth:2,tension:.3,fill:false},
     {label:'전주',data:cu,borderColor:'#B22222',backgroundColor:'#B22222',pointRadius:5,pointHoverRadius:7,borderWidth:3,tension:.3,fill:false}]},
    options:{responsive:true,plugins:{legend:{position:'top',labels:{font:{family:'Malgun Gothic',size:11}}},
     tooltip:{callbacks:{label:c=>c.dataset.label+': '+won(c.raw)+'원'}}},
-    scales:{y:{beginAtZero:false,ticks:{callback:v=>(v/1e8).toFixed(1)+'억',font:{family:'Malgun Gothic'}}},x:{ticks:{font:{family:'Malgun Gothic'}}}}}});
+    scales:{y:{min:cmpMin-cmpPad,max:cmpMax+cmpPad,ticks:{callback:v=>(v/1e8).toFixed(2)+'억',font:{family:'Malgun Gothic'}}},x:{ticks:{font:{family:'Malgun Gothic'}}}}}});
   if(window.CHD2)window.CHD2.destroy();
   window.CHD2=new Chart(document.getElementById('chart-dow-wow'),{type:'line',
    data:{labels:DOW,datasets:[{data:diff,borderColor:'#8A7F7A',backgroundColor:'#8A7F7A',borderWidth:2,tension:.3,fill:false,
