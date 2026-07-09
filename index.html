@@ -124,7 +124,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:var(--cre
 .stab.on{background:var(--brick);color:#fff}
 .btn{background:var(--brick);color:#fff;border:none;border-radius:8px;padding:9px 15px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
 
-table.grid{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+table.grid{width:100%;min-width:760px;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
 table.mxtable{table-layout:auto}
 table.grid thead th{background:var(--rose);color:var(--brick);font-weight:700;padding:10px 12px;text-align:right;white-space:nowrap;position:sticky;top:0;z-index:2;overflow:hidden}
 table.grid thead th.l{text-align:left}
@@ -434,6 +434,36 @@ const ACTION={
 };
 const RISK={'미영업':-1,'집중관리':0,'관찰필요':1,'영업일수':2,'양호':3,'성장':4,'타사포스':6};
 
+// 액션 문구 세분화: 영업일 급감 우선 분기 -> 하락폭 구간별 강도차등 -> 요일 패턴 한줄 삽입
+function weekdayNote(s){
+  const DOW=P.meta.dow;
+  const dd=DOW.map((d,i)=>({d,diff:s.cur_daily[i]-s.prev_daily[i]}));
+  let wj=0,bj=0;
+  for(let i=1;i<7;i++){if(dd[i].diff<dd[wj].diff)wj=i;if(dd[i].diff>dd[bj].diff)bj=i;}
+  if(dd[wj].diff===0 && dd[bj].diff===0) return '';
+  return ` (요일 추이: ${dd[bj].d}요일 최고 ${amtf(dd[bj].diff)}·${dd[wj].d}요일 최저 ${amtf(dd[wj].diff)})`;
+}
+function actionText(s, sg){
+  const k=sg.k;
+  // 1순위: 영업일수 자체가 급감한 케이스(휴무/단축영업 우선 확인)
+  const dayGap=(s.prev_days||0)-(s.cur_days||0);
+  if((k==='집중관리'||k==='관찰필요'||k==='영업일수') && dayGap>=2){
+    return `휴무/단축영업 사유 확인 우선 (영업일 ${s.prev_days}→${s.cur_days}일, ${dayGap}일 감소)`+weekdayNote(s);
+  }
+  if(k==='집중관리'){
+    const wp=s.wow_pct===null?0:s.wow_pct;
+    const base = wp<=-0.50
+      ? '즉시 방문 : 하락 원인(상권·경쟁·운영·품질) 파악 및 개선 협의'
+      : '유선 확인 후 필요시 방문 : 하락 원인 파악';
+    return base+weekdayNote(s);
+  }
+  if(k==='관찰필요'){
+    return '하락 요인 확인 · 판촉/배달채널 점검'+weekdayNote(s);
+  }
+  return ACTION[k];
+}
+
+
 function badge(k,ico,dot){
   const cmap={'집중관리':'b-crit','관찰필요':'b-watch','영업일수':'b-day','성장':'b-grow','양호':'b-ok','미영업':'b-mng2','타사포스':'b-day'};
   return `<span class="badge ${cmap[k]}"><span class="dot" style="background:${dot}"></span>${k}</span>`;
@@ -478,6 +508,7 @@ document.addEventListener('click',e=>{
 // ── 시그널 요약 카드 ──
 // ── 전체 매장 관리 시그널 테이블 ──
 let sortMode='risk';
+let sectionCollapsed={미영업:false,집중관리:false,관찰필요:false,영업일수:false,양호:true,성장:true};
 document.querySelectorAll('.stab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.stab').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');sortMode=b.dataset.s;renderGrid();});
@@ -528,7 +559,8 @@ function renderGrid(){
   else if(sortMode==='avg')rows.sort((a,b)=>(b.cur/(b.cur_days||1))-(a.cur/(a.cur_days||1)));
 
   document.getElementById('grid-cnt').textContent=`${rows.length}개 매장`;
-  tb.innerHTML=rows.map(s=>{
+
+  function rowHtml(s){
     const sg=sig(s);const dc=s.days_drop?' drop':'';
     const avg=s.cur_days?s.cur/s.cur_days:0;
     return `<tr data-name="${s.name}">
@@ -538,8 +570,40 @@ function renderGrid(){
       <td class="daycell${dc}">${s.cur_days}${s.days_drop?' ◷':''}</td>
       <td>${won(avg)}</td>
       <td class="${cls(s.wow_pct)}"><b>${pctf(s.wow_pct)}</b></td>
-      <td class="l act"><span>${ACTION[sg.k]}</span> <button class="detailbtn" data-name="${s.name}">상세보기 ›</button></td></tr>`;
-  }).join('');
+      <td class="l act"><span>${actionText(s,sg)}</span> <button class="detailbtn" data-name="${s.name}">상세보기 ›</button></td></tr>`;
+  }
+
+  // 시그널 미지정(전체) + 위험순 정렬일 때만 등급별 섹션으로 묶어서 표시
+  if(!sigf && sortMode==='risk'){
+    const order=['미영업','집중관리','관찰필요','영업일수','양호','성장'];
+    const SEC_META={
+      '미영업':{icon:'⛔',color:'#8B0000'},'집중관리':{icon:'●',color:'#C0392B'},
+      '관찰필요':{icon:'●',color:'#C0870C'},'영업일수':{icon:'📅',color:'#9AA0A6'},
+      '양호':{icon:'●',color:'#C4C4C4'},'성장':{icon:'●',color:'#2E7D32'}};
+    let html='';
+    order.forEach(k=>{
+      const grp=rows.filter(s=>sig(s).k===k);
+      if(!grp.length)return;
+      const collapsed=!!sectionCollapsed[k];
+      const m=SEC_META[k];
+      html+=`<tr class="sec-head" data-sec="${k}" style="cursor:pointer;background:${collapsed?'#FAFAFA':'#FCF7F4'};border-left:4px solid ${m.color}">`+
+        `<td colspan="9" style="padding:9px 14px;font-weight:800;color:${m.color};font-size:12.5px">`+
+        `<span class="sec-arrow" style="display:inline-block;transition:transform .12s;transform:rotate(${collapsed?'-90deg':'0deg'})">▾</span> `+
+        `${m.icon} ${k} ${grp.length}개</td></tr>`;
+      if(!collapsed){
+        html += grp.map(rowHtml).join('');
+      }
+    });
+    tb.innerHTML=html;
+    tb.querySelectorAll('.sec-head').forEach(tr=>tr.onclick=()=>{
+      const k=tr.dataset.sec; sectionCollapsed[k]=!sectionCollapsed[k]; renderGrid();
+    });
+    tb.querySelectorAll('tr[data-name]').forEach(tr=>tr.onclick=()=>openModal(tr.dataset.name,false));
+    tb.querySelectorAll('.detailbtn').forEach(btn=>btn.onclick=(e)=>{e.stopPropagation();openModal(btn.dataset.name,false);});
+    return;
+  }
+
+  tb.innerHTML=rows.map(rowHtml).join('');
   tb.querySelectorAll('tr').forEach(tr=>tr.onclick=()=>openModal(tr.dataset.name,false));
 }
 
@@ -563,7 +627,7 @@ function openModal(name,off){
    `<div class="mstat"><div class="l">전전주매출</div><div class="v">${won(s.prev)}</div></div>`+
    `<div class="mstat"><div class="l">전주매출</div><div class="v">${won(s.cur)}</div></div>`+
    `<div class="mstat"><div class="l">전전주대비</div><div class="v ${cls(s.wow_pct)}">${pctf(s.wow_pct)}</div></div>`;
-  document.getElementById('maction').innerHTML=`<div class="maction"><div class="t">▶ 시그널 액션 (${sg.k})</div>${ACTION[sg.k]}</div>`;
+  document.getElementById('maction').innerHTML=`<div class="maction"><div class="t">▶ 시그널 액션 (${sg.k})</div>${actionText(s,sg)}</div>`;
   // 추이 분석 (메모 대체)
   const dd=P.meta.dow.map((d,i)=>({d,diff:s.cur_daily[i]-s.prev_daily[i]}));
   let wj=0,bj=0;for(let i=1;i<7;i++){if(dd[i].diff<dd[wj].diff)wj=i;if(dd[i].diff>dd[bj].diff)bj=i;}
