@@ -168,7 +168,7 @@ td.act>span{flex:1;min-width:0}
 .dow-insight{background:#FFF8EE;border:1px solid #FCE4BF;border-left:4px solid var(--orange);border-radius:9px;padding:14px 18px;margin-bottom:16px;font-size:13px;line-height:1.75}
 .dow-insight .t{font-weight:800;color:var(--orange);font-size:13px;margin-bottom:6px}
 .dow-charts{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-bottom:18px}
-.dow-card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+.dow-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}
 .dow-card h3{font-size:13px;font-weight:700;margin-bottom:10px}
 .dow-card canvas{max-height:260px}
 .dowtable table.grid{min-width:auto}
@@ -243,13 +243,24 @@ canvas{max-height:230px}
 .weekitem.on{background:var(--rose);color:var(--brick);border-left-color:var(--brick);font-weight:800}
 .app-main{flex:1;min-width:0}
 .app-main .topbar{margin-top:0}
-@media(max-width:900px){.app-shell{display:block}.weeksidebar{position:static;width:100%;min-height:auto;border-right:none;border-bottom:1px solid var(--line)}}
+@media(max-width:900px){
+  .app-shell{display:block}
+  .weeksidebar{position:static;width:100%;min-height:auto;border-right:none;border-bottom:1px solid var(--line);padding:10px 0}
+  .weeksidebar .wstitle{cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 16px}
+  .weeksidebar .wstitle .mobile-arrow{display:inline-block;font-size:11px;transition:transform .15s}
+  .weeksidebar .wstitle.open .mobile-arrow{transform:rotate(180deg)}
+  #weeknav{display:none}
+  #weeknav.mobile-open{display:block}
+  .controls{gap:8px}
+  .controls input,.controls select,.svbar,.chip,.btn,.filtbtn,.sigchip,.svtab{min-height:38px}
+  .controls input{width:140px;flex:1 1 140px}
+}
 </style>
 </head>
 <body>
 <div class="app-shell">
   <div class="weeksidebar">
-    <div class="wstitle">📅 주차 선택</div>
+    <div class="wstitle" id="wstitle-toggle">📅 주차 선택 <span class="mobile-arrow">▾</span></div>
     <div id="weeknav"></div>
   </div>
   <div class="app-main">
@@ -313,8 +324,8 @@ canvas{max-height:230px}
     <div class="svbar"><span class="svbar-l">👤 담당자별 보기 :</span><div class="svtabs" id="svtabs-dow"></div></div>
     <div class="dow-insight" id="dow-insight"></div>
     <div class="dow-charts">
-      <div class="dow-card"><h3>요일별 매출 · 전전주 vs 전주</h3><canvas id="chart-dow-cmp"></canvas></div>
-      <div class="dow-card"><h3>요일별 전전주 대비 증감액</h3><canvas id="chart-dow-wow"></canvas></div>
+      <div class="dow-card"><h3><span class="sq" style="display:inline-block;width:10px;height:10px;background:var(--brick);border-radius:3px;margin-right:7px;vertical-align:middle"></span>요일별 매출 · 전전주 vs 전주</h3><canvas id="chart-dow-cmp"></canvas></div>
+      <div class="dow-card"><h3><span class="sq" style="display:inline-block;width:10px;height:10px;background:var(--brick);border-radius:3px;margin-right:7px;vertical-align:middle"></span>요일별 전전주 대비 증감액</h3><canvas id="chart-dow-wow"></canvas></div>
     </div>
     <div class="dowtable panel">
       <table class="grid"><thead><tr><th class="l" style="width:12%">요일</th><th style="width:22%">전전주매출</th><th style="width:22%">전주매출</th><th style="width:22%">증감액</th><th style="width:22%">증감율</th></tr></thead>
@@ -642,7 +653,7 @@ function openModal(name,off){
   const modalPad=(modalMax-modalMin)*0.12 || modalMax*0.03 || 1;
   window.CH=new Chart(document.getElementById('chart'),{type:'line',
    data:{labels:P.meta.dow,datasets:[
-    {label:'전전주 ('+P.meta.prev_range+')',data:s.prev_daily,borderColor:'#D8A48F',backgroundColor:'#D8A48F',pointRadius:4,pointHoverRadius:6,borderWidth:2,tension:.3,fill:false},
+    {label:'전전주 ('+P.meta.prev_range+')',data:s.prev_daily,borderColor:'#A8A29C',backgroundColor:'#A8A29C',pointRadius:4,pointHoverRadius:6,borderWidth:2,tension:.3,fill:false},
     {label:'전주 ('+P.meta.cur_range+')',data:s.cur_daily,borderColor:'#B22222',backgroundColor:'#B22222',pointRadius:4,pointHoverRadius:6,borderWidth:3,tension:.3,fill:false}]},
    options:{responsive:true,plugins:{legend:{position:'top',labels:{font:{family:'Malgun Gothic',size:11}}},
     tooltip:{callbacks:{label:c=>c.dataset.label+': '+won(c.raw)+'원'}}},
@@ -689,7 +700,7 @@ function renderDow(){
   const cmpPad=(cmpMax-cmpMin)*0.12 || cmpMax*0.03;
   window.CHD1=new Chart(document.getElementById('chart-dow-cmp'),{type:'line',
    data:{labels:DOW,datasets:[
-    {label:'전전주',data:pv,borderColor:'#D8A48F',backgroundColor:'#D8A48F',pointRadius:5,pointHoverRadius:7,borderWidth:2,tension:.3,fill:false},
+    {label:'전전주',data:pv,borderColor:'#A8A29C',backgroundColor:'#A8A29C',pointRadius:5,pointHoverRadius:7,borderWidth:2,tension:.3,fill:false},
     {label:'전주',data:cu,borderColor:'#B22222',backgroundColor:'#B22222',pointRadius:5,pointHoverRadius:7,borderWidth:3,tension:.3,fill:false}]},
    options:{responsive:true,plugins:{legend:{position:'top',labels:{font:{family:'Malgun Gothic',size:11}}},
     tooltip:{callbacks:{label:c=>c.dataset.label+': '+won(c.raw)+'원'}}},
@@ -1049,6 +1060,12 @@ function renderWeekNav(){
 }
 refreshStoreView();
 renderWeekNav();
+document.getElementById('wstitle-toggle').onclick=()=>{
+  const nav=document.getElementById('weeknav');
+  const t=document.getElementById('wstitle-toggle');
+  nav.classList.toggle('mobile-open');
+  t.classList.toggle('open');
+};
 </script>
 </body>
 </html>
